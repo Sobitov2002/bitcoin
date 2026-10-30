@@ -310,6 +310,17 @@ def load_volatility_model():
     return joblib.load(VOLATILITY_MODEL_PATH)
 
 
+def _patch_pipeline_compat(bundle: Dict[str, Any]) -> Dict[str, Any]:
+    """Patch scikit-learn cross-version serialization differences (e.g. SimpleImputer._fill_dtype)."""
+    if isinstance(bundle, dict) and "model" in bundle:
+        model = bundle["model"]
+        if hasattr(model, "named_steps"):
+            for step in model.named_steps.values():
+                if hasattr(step, "strategy") and not hasattr(step, "_fill_dtype"):
+                    step._fill_dtype = np.dtype(float)
+    return bundle
+
+
 @st.cache_resource
 def load_direction_model():
     """Load trained direction classification pipeline."""
@@ -318,7 +329,8 @@ def load_direction_model():
         path = DIRECTION_MODEL_PATH_FALLBACK
     if not path.exists():
         raise FileNotFoundError(f"Yo'nalish modeli topilmadi: {path}")
-    return joblib.load(path)
+    bundle = joblib.load(path)
+    return _patch_pipeline_compat(bundle)
 
 
 @st.cache_data(ttl=10)

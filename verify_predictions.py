@@ -134,6 +134,27 @@ def evaluate_single_observation(obs: Dict[str, Any], now_utc: datetime) -> Optio
     }
 
     db_manager.update_observation_evaluation(obs_id, eval_data, new_status="COMPLETED")
+
+    # Send automated Telegram alert if configured
+    try:
+        import telegram_bot
+        ai_res_str = "✅ TO'G'RI" if ai_correct else "❌ XATO"
+        user_res_str = "✅ TO'G'RI" if user_correct else "❌ XATO"
+        change_sign = "+" if price_diff > 0 else ""
+        notif_text = (
+            f"🔔 <b>KUZATUV NATIJASI TAYYOR!</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"💰 Boshlang'ich narx: <b>${initial_price:,.2f}</b>\n"
+            f"🏁 Haqiqiy narx: <b>${actual_price:,.2f}</b> ({change_sign}{pct_diff:.2f}%)\n"
+            f"📊 Bozor yo'nalishi: <b>{actual_dir}</b>\n\n"
+            f"🤖 AI prognozi: <b>{ai_dir}</b> ({ai_res_str})\n"
+            f"👤 Sizning taxminingiz: <b>{user_dir}</b> ({user_res_str})\n\n"
+            f"⏱ <i>Kuzatuv ufqi: {obs.get('horizon_hours', 4)} soat</i>"
+        )
+        telegram_bot.send_telegram_message(notif_text)
+    except Exception as exc:
+        print(f"[Telegram Notification Error]: {exc}")
+
     return eval_data
 
 

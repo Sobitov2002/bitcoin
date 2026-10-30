@@ -1,0 +1,17 @@
+[Unit]
+Description=Bitcoin AI Telegram Bot Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/html/bitcoin
+Environment="PATH=/var/www/html/bitcoin/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/var/www/html/bitcoin/.venv/bin/python telegram_bot.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/bitcoin-bot.log
+StandardError=append:/var/log/bitcoin-bot.error.log
+
+[Install]
+WantedBy=multi-user.target

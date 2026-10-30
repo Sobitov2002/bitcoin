@@ -5,8 +5,8 @@
 set -e
 
 echo "=== 1. Tizim paketlarini yangilash ==="
-sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install -y python3 python3-pip python3-venv git curl ufw
+sudo apt-get update -y
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip python3-venv git curl ufw
 
 echo "=== 2. Fayl huquqlari va yo'llarini tekshirish ==="
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -63,7 +63,33 @@ sudo systemctl daemon-reload
 sudo systemctl enable bitcoin-dashboard
 sudo systemctl restart bitcoin-dashboard
 
-echo "=== 8. Cron vazifalarini rejalashtirish ==="
+echo "=== 8. Telegram Bot servisini o'rnatish ==="
+BOT_SERVICE_FILE="/etc/systemd/system/bitcoin-bot.service"
+sudo bash -c "cat > $BOT_SERVICE_FILE" <<EOF
+[Unit]
+Description=Bitcoin AI Telegram Bot Service
+After=network.target
+
+[Service]
+Type=simple
+User=$(whoami)
+WorkingDirectory=$APP_DIR
+Environment="PATH=$APP_DIR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=$APP_DIR/.venv/bin/python telegram_bot.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/bitcoin-bot.log
+StandardError=append:/var/log/bitcoin-bot.error.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable bitcoin-bot || true
+sudo systemctl restart bitcoin-bot || true
+
+echo "=== 9. Cron vazifalarini rejalashtirish ==="
 CRON_CMD="5 * * * * cd $APP_DIR && $APP_DIR/.venv/bin/python update_data.py >> /var/log/btc_update.log 2>&1
 10 * * * * cd $APP_DIR && $APP_DIR/.venv/bin/python verify_predictions.py >> /var/log/btc_verify.log 2>&1"
 

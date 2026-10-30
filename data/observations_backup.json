@@ -23,5 +23,30 @@
     "status": "PENDING",
     "evaluation": {},
     "_id": "0fdbe57b-51f2-498d-90f8-fcbbf6f1afba"
+  },
+  {
+    "created_at_utc": "2026-10-30T14:26:24.874161+00:00",
+    "created_at_local": "2026-10-30 14:26 UTC",
+    "horizon_hours": 4,
+    "target_time_utc": "2026-10-30T18:26:24.874161+00:00",
+    "initial_price": 76934.01,
+    "price_source": "Binance BTCUSDT",
+    "currency": "USD",
+    "ai_forecast": {
+      "direction": "DOWN",
+      "probability_up": 47.55725738629706,
+      "probability_down": 52.44274261370311,
+      "volatility_pct": 0.2115576272977906,
+      "approx_lower": 80138.65203657796,
+      "approx_upper": 81478.92541466466,
+      "model_version": "Random Forest"
+    },
+    "user_prediction": {
+      "direction": "UP",
+      "notes": ""
+    },
+    "status": "PENDING",
+    "evaluation": {},
+    "_id": "10192a86-0f26-4d42-ba9f-310d87503233"
   }
 ]
