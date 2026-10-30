@@ -69,9 +69,7 @@ pip install -r requirements.txt
 ### 3. MongoDB konfiguratsiyasi (`.env`)
 `.env` faylini oching va `<db_username>` o'rniga o'zingizning haqiqiy MongoDB Atlas foydalanuvchi nomingizni kiriting:
 ```env
-MONGO_URI=mongodb+srv://<db_username>:Glr0lRlRXkRPUDmy@cluster0.sin6sgp.mongodb.net/?retryWrites=true&w=majority
-MONGO_DB_NAME=bitcoin_ai_db
-MONGO_COLLECTION=observations
+
 ```
 *(Eslatma: Agar `.env` da foydalanuvchi nomi kiritilmasa ham, dastur to'xtab qolmaydi, balki lokal xotirada to'liq ishlayveradi).*
 
@@ -113,4 +111,5 @@ python -m unittest tests/test_pipeline.py
 Ushbu loyiha ilmiy tahlil va tajribaviy tadqiqot maqsadida yaratilgan. Kriptovalyuta bozori o'ta tebranuvchan bo'lib, ushbu modellar moliyaviy maslahat hisoblanmaydi.
 # bitcoin_analiytc
 # bitcoin_analiytc
+# bitcoin
 # bitcoin
