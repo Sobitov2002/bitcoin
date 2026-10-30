@@ -112,3 +112,4 @@ python -m unittest tests/test_pipeline.py
 ## ⚠️ Muhim Ogohlantirish
 Ushbu loyiha ilmiy tahlil va tajribaviy tadqiqot maqsadida yaratilgan. Kriptovalyuta bozori o'ta tebranuvchan bo'lib, ushbu modellar moliyaviy maslahat hisoblanmaydi.
 # bitcoin_analiytc
+# bitcoin_analiytc
