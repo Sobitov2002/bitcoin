@@ -1,0 +1,7 @@
+# Bitcoin AI Dashboard - Avtomatlashtirilgan Vazifalar (Cron)
+#
+# Har soatning 5-daqiqasida yangi yopilgan 1 soatlik shamni yuklaydi
+5 * * * * cd /root/BitCoin_Model && /root/BitCoin_Model/.venv/bin/python update_data.py >> /var/log/btc_update.log 2>&1
+#
+# Har soatning 10-daqiqasida muddati yetgan kuzatuvlarni tekshiradi va baholaydi
+10 * * * * cd /root/BitCoin_Model && /root/BitCoin_Model/.venv/bin/python verify_predictions.py >> /var/log/btc_verify.log 2>&1

@@ -1,0 +1,17 @@
+[Unit]
+Description=Bitcoin AI Streamlit Dashboard Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/BitCoin_Model
+Environment="PATH=/root/BitCoin_Model/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/root/BitCoin_Model/.venv/bin/streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/bitcoin-dashboard.log
+StandardError=append:/var/log/bitcoin-dashboard.error.log
+
+[Install]
+WantedBy=multi-user.target

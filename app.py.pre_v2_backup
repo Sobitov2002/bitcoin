@@ -1,0 +1,740 @@
+
+from pathlib import Path
+
+import joblib
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import requests
+import streamlit as st
+
+# =========================================================
+# CONFIGURATION
+# =========================================================
+BASE_DIR = Path(__file__).resolve().parent
+DATA_PATH = BASE_DIR / "data" / "bitcoin_hourly.csv"
+VOLATILITY_MODEL_PATH = BASE_DIR / "models" / "ridge_volatility.joblib"
+DIRECTION_MODEL_PATH = BASE_DIR / "models" / "ridge_direction.joblib"
+
+BINANCE_URL = "https://data-api.binance.vision/api/v3/klines"
+FX_URL = "https://open.er-api.com/v6/latest/USD"
+KST = "Asia/Seoul"
+
+st.set_page_config(
+    page_title="Bitcoin AI Dashboard",
+    page_icon="₿",
+    layout="wide",
+)
+
+
+# =========================================================
+# TRANSLATIONS
+# =========================================================
+TEXT = {
+    "uz": {
+        "title": "₿ Bitcoin AI Dashboard",
+        "subtitle": "Bitcoin uchun sun’iy intellekt asosidagi 4 soatlik tahlil",
+        "language": "Til / 언어",
+        "controls": "Boshqaruv",
+        "refresh": "🔄 Ma’lumotlarni yangilash",
+        "refresh_ok": "Bozor ma’lumotlari yangilandi.",
+        "refresh_error": "Ma’lumotlarni yangilab bo‘lmadi",
+        "price": "Bitcoin narxi",
+        "volatility": "4 soatlik volatillik prognozi",
+        "horizon": "Prognoz davri",
+        "forecast_start": "Prognoz boshlanishi",
+        "forecast_end": "Prognoz tugashi",
+        "last_data": "Oxirgi yopilgan sham vaqti",
+        "price_chart": "Bitcoin narxi tarixi (KRW)",
+        "recent": "Oxirgi ma’lumotlar",
+        "model_info": "Model haqida",
+        "fx_rate": "USD/KRW kursi",
+        "fx_time": "Kurs yangilangan vaqt",
+        "records": "Soatlik ma’lumotlar soni",
+        "model": "Model",
+        "direction_title": "📈 Keyingi 4 soatdagi narx yo‘nalishi",
+        "up": "🟢 Ko‘tarilish ehtimoli",
+        "down": "🔴 Tushish ehtimoli",
+        "direction_up": "Ko‘tarilish ehtimoli yuqoriroq",
+        "direction_down": "Tushish ehtimoli yuqoriroq",
+        "direction_equal": "Ikkala yo‘nalish ehtimoli teng",
+        "direction_error": "Yo‘nalish modelini hisoblab bo‘lmadi",
+        "warning": (
+            "Muhim: ko‘tarilish/tushish ehtimollari model bahosidir, "
+            "haqiqiy bozor ehtimolining kafolati emas. "
+            "Model sinovlaridagi balanced accuracy taxminan 51.7% bo‘lgan. "
+            "Bu moliyaviy maslahat emas."
+        ),
+        "volatility_note": (
+            "Volatillik narx qanchalik o‘zgaruvchan bo‘lishi mumkinligini "
+            "baholaydi. U narx yo‘nalishini bildirmaydi."
+        ),
+        "fx_error": (
+            "USD/KRW kursini olib bo‘lmadi. "
+            "Koreya vonidagi narx vaqtincha ko‘rsatilmaydi."
+        ),
+        "stale": "Ogohlantirish: bozor ma’lumotlari eskirgan bo‘lishi mumkin.",
+        "no_data": "Prognoz uchun ma’lumot yetarli emas.",
+        "missing_file": "Fayl topilmadi",
+        "chart_time": "Vaqt (KST)",
+        "chart_price": "Narx (KRW)",
+        "source": "Bozor ma’lumoti: Binance · Valyuta kursi: ExchangeRate-API",
+        "forecast_description": (
+            "Volatillik modeli keyingi to‘rtta soatlik log-returnning "
+            "standart og‘ishini bashorat qiladi. Bu narxning aniq oralig‘i emas."
+        ),
+        "data_age": "Ma’lumot yoshi",
+        "hours": "soat",
+        "trained_until": "Model o‘qitilgan oxirgi vaqt",
+        "fx_historical_note": (
+            "Grafikdagi tarixiy USD narxlari joriy USD/KRW kursi bilan "
+            "konvertatsiya qilingan; ular tarixiy KRW kotirovkalari emas."
+        ),
+        "direction_model": "Yo‘nalish modeli",
+        "volatility_model": "Volatillik modeli",
+        "probability_note": (
+            "Foizlar modelning predict_proba() natijalari. "
+            "Ular alohida kalibrlanmagan va kafolatlangan ehtimollar emas."
+        ),
+        "direction_no_model": "Yo‘nalish modeli fayli topilmadi.",
+    },
+    "ko": {
+        "title": "₿ 비트코인 AI 대시보드",
+        "subtitle": "인공지능 기반 비트코인 4시간 분석",
+        "language": "언어 / Til",
+        "controls": "제어판",
+        "refresh": "🔄 시장 데이터 새로고침",
+        "refresh_ok": "시장 데이터를 업데이트했습니다.",
+        "refresh_error": "시장 데이터를 업데이트하지 못했습니다",
+        "price": "비트코인 가격",
+        "volatility": "4시간 변동성 예측",
+        "horizon": "예측 기간",
+        "forecast_start": "예측 시작",
+        "forecast_end": "예측 종료",
+        "last_data": "최근 마감 캔들 시간",
+        "price_chart": "비트코인 가격 기록 (KRW)",
+        "recent": "최근 데이터",
+        "model_info": "모델 정보",
+        "fx_rate": "USD/KRW 환율",
+        "fx_time": "환율 업데이트 시간",
+        "records": "시간별 데이터 수",
+        "model": "모델",
+        "direction_title": "📈 향후 4시간 가격 방향",
+        "up": "🟢 상승 가능성",
+        "down": "🔴 하락 가능성",
+        "direction_up": "상승 가능성이 더 높습니다",
+        "direction_down": "하락 가능성이 더 높습니다",
+        "direction_equal": "두 방향의 가능성이 같습니다",
+        "direction_error": "가격 방향 모델을 계산하지 못했습니다",
+        "warning": (
+            "중요: 상승/하락 확률은 모델의 추정치이며 실제 시장 확률을 "
+            "보장하지 않습니다. 테스트 balanced accuracy는 약 51.7%였습니다. "
+            "투자 조언이 아닙니다."
+        ),
+        "volatility_note": (
+            "변동성은 가격이 얼마나 크게 변할 수 있는지를 나타냅니다. "
+            "가격의 상승 또는 하락 방향을 의미하지 않습니다."
+        ),
+        "fx_error": (
+            "USD/KRW 환율을 가져오지 못했습니다. "
+            "원화 가격을 일시적으로 표시할 수 없습니다."
+        ),
+        "stale": "주의: 시장 데이터가 오래되었을 수 있습니다.",
+        "no_data": "예측에 필요한 데이터가 충분하지 않습니다.",
+        "missing_file": "파일을 찾을 수 없습니다",
+        "chart_time": "시간 (한국 시간)",
+        "chart_price": "가격 (KRW)",
+        "source": "시장 데이터: Binance · 환율: ExchangeRate-API",
+        "forecast_description": (
+            "변동성 모델은 향후 4개의 시간별 로그 수익률의 표준편차를 "
+            "예측합니다. 정확한 가격 범위를 의미하지 않습니다."
+        ),
+        "data_age": "데이터 경과 시간",
+        "hours": "시간",
+        "trained_until": "모델 학습 데이터의 마지막 시간",
+        "fx_historical_note": (
+            "차트의 과거 USD 가격은 현재 USD/KRW 환율로 환산되었습니다. "
+            "과거 실제 원화 시세가 아닙니다."
+        ),
+        "direction_model": "방향 예측 모델",
+        "volatility_model": "변동성 모델",
+        "probability_note": (
+            "비율은 predict_proba() 모델 출력입니다. 별도로 보정되지 않았으며 "
+            "실제 확률을 보장하지 않습니다."
+        ),
+        "direction_no_model": "방향 예측 모델 파일을 찾을 수 없습니다.",
+    },
+}
+
+
+# =========================================================
+# LOAD DATA AND MODELS
+# =========================================================
+@st.cache_data(ttl=60)
+def load_data():
+    df = pd.read_csv(DATA_PATH, parse_dates=["timestamp"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+
+    return (
+        df.sort_values("timestamp")
+        .drop_duplicates("timestamp", keep="last")
+        .reset_index(drop=True)
+    )
+
+
+@st.cache_resource
+def load_volatility_model():
+    return joblib.load(VOLATILITY_MODEL_PATH)
+
+
+@st.cache_resource
+def load_direction_model():
+    return joblib.load(DIRECTION_MODEL_PATH)
+
+
+
+@st.cache_data(ttl=10)
+def get_live_btc_price():
+    url = "https://data-api.binance.vision/api/v3/ticker/price"
+
+    response = requests.get(
+        url,
+        params={"symbol": "BTCUSDT"},
+        timeout=10,
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    return float(data["price"])
+@st.cache_data(ttl=900)
+def get_usd_krw():
+    response = requests.get(FX_URL, timeout=10)
+    response.raise_for_status()
+    result = response.json()
+
+    if result.get("result") != "success":
+        raise ValueError("Exchange rate service returned an unsuccessful response.")
+
+    rate = float(result["rates"]["KRW"])
+    updated = result.get("time_last_update_utc", "Unknown")
+
+    if rate <= 0:
+        raise ValueError("Invalid USD/KRW rate.")
+
+    return rate, updated
+
+
+# =========================================================
+# UPDATE BINANCE DATA
+# =========================================================
+def refresh_market_data():
+    """Fetch recent completed hourly candles and merge them into the CSV."""
+    response = requests.get(
+        BINANCE_URL,
+        params={
+            "symbol": "BTCUSDT",
+            "interval": "1h",
+            "limit": 1000,
+        },
+        timeout=20,
+    )
+    response.raise_for_status()
+    candles = response.json()
+
+    if not isinstance(candles, list) or not candles:
+        raise ValueError("Binance returned no candle data.")
+
+    now = pd.Timestamp.now(tz="UTC")
+    rows = []
+
+    for candle in candles:
+        open_time = pd.to_datetime(candle[0], unit="ms", utc=True)
+        close_time = open_time + pd.Timedelta(hours=1)
+
+        # Skip the currently open candle.
+        if close_time > now:
+            continue
+
+        rows.append({
+            "timestamp": close_time,
+            "open": float(candle[1]),
+            "high": float(candle[2]),
+            "low": float(candle[3]),
+            "close": float(candle[4]),
+            "volume": float(candle[5]),
+        })
+
+    if not rows:
+        raise ValueError("No completed hourly candles returned.")
+
+    fresh = pd.DataFrame(rows)
+
+    if DATA_PATH.exists():
+        old = load_data().copy()
+        combined = pd.concat([old, fresh], ignore_index=True, sort=False)
+    else:
+        combined = fresh
+
+    combined["timestamp"] = pd.to_datetime(
+        combined["timestamp"], utc=True
+    )
+    combined = (
+        combined.sort_values("timestamp")
+        .drop_duplicates("timestamp", keep="last")
+        .reset_index(drop=True)
+    )
+
+    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    combined.to_csv(DATA_PATH, index=False)
+
+    load_data.clear()
+    get_usd_krw.clear()
+    get_live_btc_price.clear()
+
+    return len(fresh)
+
+
+# =========================================================
+# FEATURE ENGINEERING
+# Must match the features used during model training.
+# =========================================================
+def build_features(df):
+    df = df.copy()
+
+    close = df["close"]
+    volume = df["volume"]
+
+    df["log_return"] = np.log(close / close.shift(1))
+    df["vol_4h"] = df["log_return"].rolling(4).std()
+    df["vol_24h"] = df["log_return"].rolling(24).std()
+    df["vol_72h"] = df["log_return"].rolling(72).std()
+
+    df["return_1h"] = df["log_return"]
+    df["return_4h"] = np.log(close / close.shift(4))
+    df["return_24h"] = np.log(close / close.shift(24))
+
+    df["volume_change_24h"] = volume.pct_change(24)
+    df["range_pct"] = (df["high"] - df["low"]) / close
+
+    return df
+
+
+def format_kst(timestamp):
+    timestamp = pd.Timestamp(timestamp)
+
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.tz_localize("UTC")
+
+    return timestamp.tz_convert(KST).strftime("%Y-%m-%d %H:%M KST")
+
+
+# =========================================================
+# SIDEBAR / LANGUAGE
+# =========================================================
+language = st.sidebar.selectbox(
+    "Til / 언어",
+    options=["O‘zbekcha", "한국어"],
+    index=0,
+)
+
+lang = "uz" if language == "O‘zbekcha" else "ko"
+t = TEXT[lang]
+
+st.title(t["title"])
+st.caption(t["subtitle"])
+
+if not DATA_PATH.exists():
+    st.error(f"{t['missing_file']}: {DATA_PATH}")
+    st.stop()
+
+if not VOLATILITY_MODEL_PATH.exists():
+    st.error(f"{t['missing_file']}: {VOLATILITY_MODEL_PATH}")
+    st.stop()
+
+if not DIRECTION_MODEL_PATH.exists():
+    st.error(t["direction_no_model"])
+    st.info(
+        "Terminalda avval `python direction_model.py` buyrug‘ini ishga tushiring."
+        if lang == "uz"
+        else "터미널에서 먼저 `python direction_model.py`를 실행하세요."
+    )
+    st.stop()
+
+with st.sidebar:
+    st.header(t["controls"])
+
+    if st.button(t["refresh"], use_container_width=True):
+        try:
+            with st.spinner(
+                "데이터를 업데이트하는 중..." if lang == "ko"
+                else "Ma’lumotlar yangilanmoqda..."
+            ):
+                count = refresh_market_data()
+
+            st.success(f"{t['refresh_ok']} ({count})")
+            st.rerun()
+
+        except Exception as exc:
+            st.error(f"{t['refresh_error']}: {exc}")
+
+    st.caption(t["source"])
+
+
+# =========================================================
+# MAIN DASHBOARD
+# =========================================================
+try:
+    raw = load_data()
+    volatility_bundle = load_volatility_model()
+    direction_bundle = load_direction_model()
+
+    required_columns = {
+        "timestamp", "open", "high", "low", "close", "volume"
+    }
+    missing_columns = required_columns - set(raw.columns)
+
+    if missing_columns:
+        st.error(
+            f"Missing data columns: {', '.join(sorted(missing_columns))}"
+        )
+        st.stop()
+
+    # Build all features once.
+    featured = build_features(raw)
+    featured = featured.replace([np.inf, -np.inf], np.nan)
+
+    # ---------------- VOLATILITY MODEL ----------------
+    volatility_features = volatility_bundle["features"]
+    volatility_model = volatility_bundle["model"]
+
+    volatility_valid = featured.dropna(
+        subset=volatility_features
+    )
+
+    if volatility_valid.empty:
+        st.error(t["no_data"])
+        st.stop()
+
+    latest_volatility = volatility_valid.iloc[[-1]]
+    latest = latest_volatility.iloc[0]
+
+    current_price_usd = float(latest["close"])
+    live_price_usd = get_live_btc_price()
+    volatility_prediction = max(
+        float(
+            volatility_model.predict(
+                latest_volatility[volatility_features]
+            )[0]
+        ),
+        0.0,
+    )
+    volatility_pct = volatility_prediction * 100
+
+    # ---------------- DIRECTION MODEL ----------------
+    direction_features = direction_bundle["features"]
+    direction_model = direction_bundle["model"]
+
+    direction_valid = featured.dropna(
+        subset=direction_features
+    )
+
+    if direction_valid.empty:
+        st.error(t["no_data"])
+        st.stop()
+
+    latest_direction = direction_valid.iloc[[-1]]
+
+    if not hasattr(direction_model, "predict_proba"):
+        raise ValueError(
+            "Direction model does not support predict_proba()."
+        )
+
+    probabilities = direction_model.predict_proba(
+        latest_direction[direction_features]
+    )[0]
+
+    classes = list(direction_model.classes_)
+
+    if 1 not in classes or 0 not in classes:
+        raise ValueError(
+            "Direction model must contain both classes 0 and 1."
+        )
+
+    up_probability = float(probabilities[classes.index(1)]) * 100
+    down_probability = float(probabilities[classes.index(0)]) * 100
+
+    if up_probability > down_probability:
+        direction_label = t["direction_up"]
+    elif down_probability > up_probability:
+        direction_label = t["direction_down"]
+    else:
+        direction_label = t["direction_equal"]
+
+    # ---------------- TIMESTAMPS ----------------
+    data_time = pd.Timestamp(latest["timestamp"])
+
+    if data_time.tzinfo is None:
+        data_time = data_time.tz_localize("UTC")
+    else:
+        data_time = data_time.tz_convert("UTC")
+
+    now_utc = pd.Timestamp.now(tz="UTC")
+    age_hours = max(
+        0.0,
+        (now_utc - data_time).total_seconds() / 3600,
+    )
+
+    # The saved timestamp marks the candle close time.
+    forecast_start = data_time
+    forecast_end = data_time + pd.Timedelta(hours=4)
+
+    # ---------------- EXCHANGE RATE ----------------
+    try:
+        
+        fx_rate, fx_updated = get_usd_krw()
+        fx_available = True
+        current_price_krw = current_price_usd * fx_rate
+        live_price_krw = live_price_usd * fx_rate
+        # Taxminiy 4 soatlik narx diapazoni.
+        # Bu statistik jihatdan kalibrlangan interval emas.
+        # prediction — kelgusi 4 ta soatlik log-returnning prognoz qilingan std qiymati.
+        approx_4h_sigma = volatility_prediction * np.sqrt(4)
+        lower_price_krw = current_price_krw * np.exp(
+            -1.96 * approx_4h_sigma
+        )
+        upper_price_krw = current_price_krw * np.exp(
+            1.96 * approx_4h_sigma
+        )
+
+    except Exception:
+        fx_available = False
+        fx_rate = None
+        fx_updated = None
+        current_price_krw = None
+
+    # =================================================
+    # TOP METRICS
+    # =================================================
+    c1, c2, c3, c4 = st.columns(4)
+    if fx_available:
+        c1.metric(
+            t["price"],
+            f"₩{current_price_krw:,.0f}",
+        )
+        c4.metric(
+        "Jonli BTC narxi" if lang == "uz" else "실시간 BTC 가격",
+        f"₩{live_price_krw:,.0f}",
+    )
+    else:
+        c1.metric(t["price"], "—")
+        st.warning(t["fx_error"])
+
+    c2.metric(
+        t["volatility"],
+        f"{volatility_pct:.4f}%",
+    )
+
+    c3.metric(
+        t["horizon"],
+        "4시간" if lang == "ko" else "4 soat",
+    )
+
+    # =================================================
+    # FORECAST TIME
+    # =================================================
+    time_col1, time_col2 = st.columns(2)
+
+    with time_col1:
+        st.subheader(t["forecast_start"])
+        st.write(format_kst(forecast_start))
+
+    with time_col2:
+        st.subheader(t["forecast_end"])
+        st.write(format_kst(forecast_end))
+
+    st.caption(
+        f"{t['last_data']}: {format_kst(data_time)}"
+    )
+
+    age_text = (
+        f"{t['data_age']}: {age_hours:.1f} {t['hours']}"
+    )
+    st.caption(age_text)
+
+    if age_hours > 2:
+        st.warning(t["stale"])
+
+    # =================================================
+    # DIRECTION FORECAST
+    # =================================================
+    st.divider()
+    st.subheader(t["direction_title"])
+
+    d1, d2 = st.columns(2)
+
+    d1.metric(
+        t["up"],
+        f"{up_probability:.1f}%",
+    )
+
+    d2.metric(
+        t["down"],
+        f"{down_probability:.1f}%",
+    )
+
+    st.write(f"**{direction_label}**")
+    st.caption(t["probability_note"])
+    st.warning(t["warning"])
+
+
+    # =================================================
+    # APPROXIMATE 4-HOUR PRICE RANGE
+    # =================================================
+    st.divider()
+
+    if fx_available:
+        st.subheader(
+            "💰 Keyingi 4 soat uchun taxminiy narx oralig‘i"
+            if lang == "uz"
+            else "💰 향후 4시간 예상 가격 범위"
+        )
+
+        r1, r2, r3 = st.columns(3)
+
+        r1.metric(
+            "Joriy narx" if lang == "uz" else "현재 가격",
+            f"₩{current_price_krw:,.0f}",
+        )
+
+        r2.metric(
+            "Taxminiy pastki chegara" if lang == "uz" else "예상 하한",
+            f"₩{lower_price_krw:,.0f}",
+        )
+
+        r3.metric(
+            "Taxminiy yuqori chegara" if lang == "uz" else "예상 상한",
+            f"₩{upper_price_krw:,.0f}",
+        )
+
+        st.info(
+            f"Taxminiy diapazon: ₩{lower_price_krw:,.0f} – "
+            f"₩{upper_price_krw:,.0f}. "
+            "Bu soddalashtirilgan matematik taxmin; model tomonidan "
+            "bevosita bashorat qilingan narxlar emas."
+            if lang == "uz"
+            else
+            f"예상 범위: ₩{lower_price_krw:,.0f} – "
+            f"₩{upper_price_krw:,.0f}. "
+            "단순화된 수학적 추정이며 모델이 직접 예측한 가격은 아닙니다."
+        )
+    else:
+        st.warning(t["fx_error"])
+
+
+    # =================================================
+    # FX DETAILS
+    # =================================================
+    if fx_available:
+        fx_col1, fx_col2 = st.columns(2)
+
+        fx_col1.metric(
+            t["fx_rate"],
+            f"₩{fx_rate:,.2f} / USD",
+        )
+
+        fx_col2.write(f"**{t['fx_time']}**")
+        fx_col2.write(str(fx_updated))
+
+    # =================================================
+    # PRICE CHART
+    # =================================================
+    st.divider()
+    st.subheader(t["price_chart"])
+
+    chart_df = raw.tail(24 * 7).copy()
+    chart_df["timestamp"] = pd.to_datetime(
+        chart_df["timestamp"], utc=True
+    )
+    chart_df["time_kst"] = chart_df["timestamp"].dt.tz_convert(KST)
+
+    if fx_available:
+        chart_df["price_krw"] = chart_df["close"] * fx_rate
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=chart_df["time_kst"],
+                y=chart_df["price_krw"],
+                mode="lines",
+                name="BTC/KRW",
+            )
+        )
+
+        fig.update_layout(
+            xaxis_title=t["chart_time"],
+            yaxis_title=t["chart_price"],
+            hovermode="x unified",
+            margin=dict(l=10, r=10, t=30, b=10),
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(t["fx_historical_note"])
+    else:
+        st.info(t["fx_error"])
+
+    # =================================================
+    # RECENT DATA
+    # =================================================
+    left, right = st.columns(2)
+
+    with left:
+        st.subheader(t["recent"])
+
+        recent = raw.tail(10).sort_values(
+            "timestamp", ascending=False
+        ).copy()
+
+        recent["timestamp"] = pd.to_datetime(
+            recent["timestamp"], utc=True
+        ).dt.tz_convert(KST).astype(str)
+
+        if fx_available:
+            recent["close_KRW"] = (
+                recent["close"] * fx_rate
+            ).round(0)
+
+        st.dataframe(
+            recent,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # =================================================
+    # MODEL DETAILS
+    # =================================================
+    with right:
+        st.subheader(t["model_info"])
+
+        st.write(
+            f"**{t['volatility_model']}:** "
+            f"{volatility_bundle.get('model_name', 'Ridge Regression')}"
+        )
+
+        st.write(
+            f"**{t['direction_model']}:** "
+            f"{direction_bundle.get('model_name', type(direction_model).__name__)}"
+        )
+
+        st.write(t["forecast_description"])
+        st.write(f"**{t['records']}:** {len(raw):,}")
+
+        st.write(
+            f"**{t['trained_until']}:** "
+            f"{direction_bundle.get('trained_until', 'Unknown')}"
+        )
+
+    st.caption(t["source"])
+
+except Exception as exc:
+    st.error(f"Dashboard error: {exc}")
+    st.exception(exc)

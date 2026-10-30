@@ -1,0 +1,27 @@
+[
+  {
+    "created_at_utc": "2026-10-25T18:00:19.450438+00:00",
+    "created_at_local": "2026-10-25 18:00 UTC",
+    "horizon_hours": 4,
+    "target_time_utc": "2026-10-25T22:00:19.450438+00:00",
+    "initial_price": 80796.0,
+    "price_source": "Binance BTCUSDT",
+    "currency": "USD",
+    "ai_forecast": {
+      "direction": "DOWN",
+      "probability_up": 47.557257386297046,
+      "probability_down": 52.44274261370311,
+      "volatility_pct": 0.2115576272977906,
+      "approx_lower": 80138.65203657796,
+      "approx_upper": 81478.92541466466,
+      "model_version": "Random Forest"
+    },
+    "user_prediction": {
+      "direction": "DOWN",
+      "notes": "Yaxshi ishlashi kerak"
+    },
+    "status": "PENDING",
+    "evaluation": {},
+    "_id": "0fdbe57b-51f2-498d-90f8-fcbbf6f1afba"
+  }
+]
